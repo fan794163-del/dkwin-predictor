@@ -49,24 +49,3 @@ def start_dkwin_scraper():
 
 @app.route('/live-prediction', methods=['GET'])
 def get_prediction():
-    last_crash = live_data["last_crash"]
-    
-    # আসল ডাটার ওপর ভিত্তি করে অ্যালগরিদম
-    if last_crash < 2.00:
-        predicted_multiplier = last_crash + 1.25
-    else:
-        predicted_multiplier = 1.10 + (time.time() % 0.8)
-        
-    return jsonify({
-        "status": "success",
-        "last_crash": last_crash,
-        "prediction": round(predicted_multiplier, 2)
-    })
-
-if __name__ == "__main__":
-    # স্ক্র্যাপারটি আলাদা থ্রেডে ব্যাকগ্রাউন্ডে সচল থাকবে
-    scraper_thread = threading.Thread(target=start_dkwin_scraper, daemon=True)
-    scraper_thread.start()
-    
-    # লোকাল পোর্ট ৫০00 এ রান হবে
-    app.run(host="0.0.0.0", port=5000)
