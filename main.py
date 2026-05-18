@@ -1,33 +1,72 @@
+import threading
 import time
 from flask import Flask, jsonify
 from flask_cors import CORS
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 CORS(app)
 
+# গ্লোবাল ভেরিয়েবল যেখানে আসল লাইভ ডাটা জমা থাকবে
+live_data = {"last_crash": 1.00}
+
+def start_dkwin_scraper():
+    print("🚀 Dkwin আসল লাইভ স্ক্র্যাপার চালু হচ্ছে...")
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # ব্যাকগ্রাউন্ডে চলবে
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    # ড্রাইভার সেটআপ
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    # Dkwin এর অ্যাভিয়েটর গেম পেজ (প্রয়োজনে সঠিক লাইভ গেম ইউআরএল দিন)
+    driver.get("https://dkwin.com/game/aviator") 
+    time.sleep(10) # পেজটি পুরোপুরি লোড হওয়ার জন্য সময় দেওয়া
+
+    last_checked_multiplier = ""
+
+    while True:
+        try:
+            # গেমের শেষ ক্র্যাশ নম্বরের ক্লাস নেম (Dkwin অনুযায়ী)
+            crash_elements = driver.find_elements(By.CLASS_NAME, "stats-item")
+            if crash_elements:
+                latest_crash_text = crash_elements[0].text
+                clean_number = latest_crash_text.replace('x', '').strip()
+                
+                if clean_number != last_checked_multiplier:
+                    last_checked_multiplier = clean_number
+                    live_data["last_crash"] = float(clean_number)
+                    print(f"🎯 নতুন ক্র্যাশ ডাটা পাওয়া গেছে: {clean_number}x")
+        except Exception as e:
+            print("ডাটা রিড করতে সমস্যা হচ্ছে, পুনরায় চেষ্টা করা হচ্ছে...", e)
+        time.sleep(2)
+
 @app.route('/live-prediction', methods=['GET'])
 def get_prediction():
-    # একটি ডেমো লাইভ ক্র্যাশ ডাটা জেনারেট করা (যা রিয়েল-টাইমে ওঠানামা করবে)
-    # সময়ভিত্তিক বীজ (Seed) ব্যবহার করায় প্রতি সেকেন্ডে নম্বর পরিবর্তন হবে
-    current_time = int(time.time())
+    last_crash = live_data["last_crash"]
     
-    # গাণিতিক লজিক: ৬০% চান্স ছোট ক্র্যাশ, ৪০% চান্স বড় ক্র্যাশ
-    if current_time % 3 == 0:
-        # বড় মাল্টিপ্লায়ার (২.৫০ থেকে ৫.৫০)
-        predicted_multiplier = 2.50 + (current_time % 31) / 10
-        last_crash = 1.20 + (current_time % 5) / 10
+    # আসল ডাটার ওপর ভিত্তি করে অ্যালগরিদম
+    if last_crash < 2.00:
+        predicted_multiplier = last_crash + 1.25
     else:
-        # ছোট মাল্টিপ্লায়ার (১.০৫ থেকে ২.২০)
-        predicted_multiplier = 1.05 + (current_time % 12) / 10
-        last_crash = 2.50 + (current_time % 15) / 10
+        predicted_multiplier = 1.10 + (time.time() % 0.8)
         
     return jsonify({
         "status": "success",
-        "last_crash": round(last_crash, 2),
+        "last_crash": last_crash,
         "prediction": round(predicted_multiplier, 2)
     })
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    # স্ক্র্যাপারটি আলাদা থ্রেডে ব্যাকগ্রাউন্ডে সচল থাকবে
+    scraper_thread = threading.Thread(target=start_dkwin_scraper, daemon=True)
+    scraper_thread.start()
+    
+    # লোকাল পোর্ট ৫০00 এ রান হবে
+    app.run(host="0.0.0.0", port=5000)
