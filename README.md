@@ -1,2 +1,0 @@
-# dkwin-predictor
-All
